@@ -1,1 +1,982 @@
-C:\Users\tobya\Documents\PersonalPlanner\index.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Planner — Toby</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --navy: #0a1628;
+            --navy-card: #0f2040;
+            --navy-input: #1a3050;
+            --navy-border: #1e3a5f;
+            --gold: #c9a84c;
+            --gold-light: #e2c068;
+            --gold-dim: #8a6f30;
+            --white: #f0f4ff;
+            --muted: #7a92b0;
+            --high: #ef4444;
+            --medium: #f97316;
+            --low: #6b7280;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--navy);
+            color: var(--white);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            padding-bottom: 70px;
+        }
+
+        /* SYNC BAR */
+        .sync-bar {
+            background: var(--navy-input);
+            border-bottom: 1px solid var(--navy-border);
+            padding: 5px 24px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.72rem;
+            color: var(--muted);
+        }
+
+        .sync-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--low);
+            flex-shrink: 0;
+            transition: background 0.3s;
+        }
+
+        .sync-dot.connected { background: #22c55e; }
+        .sync-dot.syncing { background: var(--gold); animation: pulse 1s infinite; }
+
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+        /* TOP NAV */
+        nav {
+            background: var(--navy-card);
+            border-bottom: 1px solid var(--navy-border);
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav-brand {
+            font-family: 'Cinzel', serif;
+            color: var(--gold);
+            font-size: 1.05rem;
+            font-weight: 600;
+            padding: 16px 0;
+            letter-spacing: 0.05em;
+            white-space: nowrap;
+        }
+
+        .nav-tabs { display: flex; gap: 4px; }
+
+        .nav-tab {
+            background: none;
+            border: none;
+            color: var(--muted);
+            padding: 18px 18px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            font-family: 'Inter', sans-serif;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .nav-tab:hover { color: var(--white); }
+        .nav-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+        .btn-new-task {
+            background: var(--gold);
+            color: var(--navy);
+            border: none;
+            padding: 8px 18px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-new-task:hover { background: var(--gold-light); }
+
+        /* MOBILE BOTTOM NAV */
+        .bottom-nav {
+            display: none;
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background: var(--navy-card);
+            border-top: 1px solid var(--navy-border);
+            z-index: 100;
+        }
+
+        .bottom-nav-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+        }
+
+        .bottom-tab {
+            flex: 1;
+            background: none;
+            border: none;
+            color: var(--muted);
+            padding: 10px 8px 12px;
+            cursor: pointer;
+            font-size: 0.68rem;
+            font-weight: 500;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            transition: color 0.2s;
+        }
+
+        .bottom-tab.active { color: var(--gold); }
+        .bottom-tab svg { width: 22px; height: 22px; }
+
+        .bottom-tab-new {
+            flex: 1;
+            background: none;
+            border: none;
+            color: var(--muted);
+            padding: 0 8px 10px;
+            cursor: pointer;
+            font-size: 0.68rem;
+            font-weight: 500;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .plus-circle {
+            width: 42px; height: 42px;
+            background: var(--gold);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--navy);
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-top: -16px;
+            box-shadow: 0 4px 12px rgba(201,168,76,0.4);
+        }
+
+        /* VIEWS */
+        .view { display: none; padding: 28px 24px; max-width: 1100px; margin: 0 auto; }
+        .view.active { display: block; }
+
+        .view-header { margin-bottom: 24px; }
+
+        .view-title {
+            font-family: 'Cinzel', serif;
+            color: var(--gold);
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .date-display { color: var(--gold); font-size: 0.9rem; margin-bottom: 4px; }
+        .greeting { color: var(--muted); font-size: 0.875rem; }
+
+        /* DAILY FOCUS */
+        .priority-section { margin-bottom: 24px; }
+
+        .section-label {
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--muted);
+            margin-bottom: 10px;
+        }
+
+        .priority-slot {
+            background: var(--navy-card);
+            border: 1px solid var(--navy-border);
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .priority-number {
+            width: 26px; height: 26px;
+            border-radius: 50%;
+            background: var(--gold-dim);
+            color: var(--navy);
+            font-size: 0.75rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .priority-slot input[type="text"] {
+            flex: 1;
+            min-width: 100px;
+            background: none;
+            border: none;
+            color: var(--white);
+            font-size: 0.95rem;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+        }
+
+        .priority-slot input[type="text"]::placeholder { color: var(--muted); }
+
+        .priority-slot select {
+            background: var(--navy-input);
+            border: 1px solid var(--navy-border);
+            color: var(--white);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+        }
+
+        .done-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--muted);
+            font-size: 0.8rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .done-label input[type="checkbox"] { accent-color: var(--gold); cursor: pointer; width: 16px; height: 16px; }
+
+        .win-section { margin-bottom: 24px; }
+
+        .win-textarea {
+            width: 100%;
+            background: var(--navy-card);
+            border: 1px solid var(--navy-border);
+            border-radius: 10px;
+            color: var(--white);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9rem;
+            padding: 14px 16px;
+            resize: vertical;
+            min-height: 90px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .win-textarea::placeholder { color: var(--muted); }
+        .win-textarea:focus { border-color: var(--gold-dim); }
+
+        .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
+
+        .btn {
+            padding: 12px 28px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.2s;
+        }
+
+        .btn-primary { background: var(--gold); color: var(--navy); }
+        .btn-primary:hover { background: var(--gold-light); }
+        .btn-secondary { background: var(--navy-card); color: var(--muted); border: 1px solid var(--navy-border); }
+        .btn-secondary:hover { color: var(--white); }
+
+        /* THIS WEEK */
+        .week-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 10px;
+        }
+
+        .day-card {
+            background: var(--navy-card);
+            border: 1px solid var(--navy-border);
+            border-radius: 10px;
+            padding: 12px 10px;
+            min-height: 130px;
+        }
+
+        .day-card.today { border-color: var(--gold); }
+        .day-name { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 2px; }
+        .day-number { font-size: 1.25rem; font-weight: 700; color: var(--white); margin-bottom: 8px; }
+        .day-card.today .day-number { color: var(--gold); }
+
+        .task-mini-card {
+            background: var(--navy-input);
+            border-radius: 6px;
+            padding: 7px 8px;
+            margin-bottom: 5px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .task-mini-card:hover { opacity: 0.82; }
+        .task-mini-card.completed { opacity: 0.42; }
+        .task-mini-card.completed .task-mini-title { text-decoration: line-through; }
+
+        .task-mini-header { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }
+
+        .priority-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+        .task-mini-title { font-size: 0.73rem; font-weight: 600; color: var(--white); line-height: 1.3; flex: 1; }
+
+        .area-tag {
+            display: inline-block;
+            font-size: 0.63rem;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .area-tag.Work { background: rgba(59,130,246,0.2); color: #60a5fa; }
+        .area-tag.Ministry { background: rgba(34,197,94,0.2); color: #4ade80; }
+        .area-tag.Personal { background: rgba(168,85,247,0.2); color: #c084fc; }
+
+        .task-mini-desc { font-size: 0.68rem; color: var(--muted); line-height: 1.4; margin-top: 3px; }
+
+        /* MONTHLY */
+        .month-nav { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+
+        .month-title {
+            font-family: 'Cinzel', serif;
+            color: var(--gold);
+            font-size: 1.25rem;
+            font-weight: 600;
+            min-width: 180px;
+        }
+
+        .month-arrow {
+            background: var(--navy-card);
+            border: 1px solid var(--navy-border);
+            color: var(--white);
+            width: 34px; height: 34px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 0.2s;
+        }
+
+        .month-arrow:hover { border-color: var(--gold); color: var(--gold); }
+
+        .calendar-grid {
+            background: var(--navy-card);
+            border: 1px solid var(--navy-border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .calendar-header { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--navy-input); }
+
+        .cal-header-cell {
+            padding: 10px;
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--muted);
+        }
+
+        .calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); }
+
+        .cal-day {
+            border-top: 1px solid var(--navy-border);
+            border-right: 1px solid var(--navy-border);
+            padding: 8px;
+            min-height: 66px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .cal-day:hover { background: var(--navy-input); }
+        .cal-day.other-month { opacity: 0.32; }
+        .cal-day.today-cal .cal-day-number { color: var(--gold); font-weight: 700; }
+        .cal-day.selected { background: rgba(201,168,76,0.1); }
+        .cal-day-number { font-size: 0.84rem; color: var(--white); margin-bottom: 4px; }
+        .cal-dots { display: flex; gap: 3px; flex-wrap: wrap; }
+        .cal-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+        .day-detail-panel {
+            margin-top: 16px;
+            background: var(--navy-card);
+            border: 1px solid var(--navy-border);
+            border-radius: 12px;
+            padding: 20px;
+            display: none;
+        }
+
+        .day-detail-panel.visible { display: block; }
+
+        .day-detail-title {
+            font-family: 'Cinzel', serif;
+            color: var(--gold);
+            font-size: 1rem;
+            margin-bottom: 14px;
+        }
+
+        .detail-task-item {
+            background: var(--navy-input);
+            border-radius: 8px;
+            padding: 12px 14px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .detail-task-info { flex: 1; }
+        .detail-task-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 3px; }
+        .detail-task-desc { font-size: 0.8rem; color: var(--muted); }
+
+        /* MODAL */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(5,10,20,0.88);
+            z-index: 200;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .modal-overlay.open { display: flex; }
+
+        .modal {
+            background: var(--navy-card);
+            border: 1px solid var(--navy-border);
+            border-radius: 14px;
+            padding: 28px;
+            width: 100%;
+            max-width: 480px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+            max-height: 92vh;
+            overflow-y: auto;
+        }
+
+        .modal-title {
+            font-family: 'Cinzel', serif;
+            color: var(--gold);
+            font-size: 1.2rem;
+            margin-bottom: 22px;
+        }
+
+        .form-group { margin-bottom: 16px; }
+
+        .form-label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            background: var(--navy-input);
+            border: 1px solid var(--navy-border);
+            color: var(--white);
+            padding: 12px 14px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--gold-dim); }
+        .form-textarea { resize: vertical; min-height: 70px; }
+        .form-input::placeholder, .form-textarea::placeholder { color: var(--muted); }
+
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; }
+
+        .empty-state { text-align: center; padding: 36px 20px; color: var(--muted); font-size: 0.875rem; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--navy); }
+        ::-webkit-scrollbar-thumb { background: var(--navy-border); border-radius: 3px; }
+
+        /* MOBILE */
+        @media (max-width: 768px) {
+            nav .nav-tabs { display: none; }
+            nav .btn-new-task { display: none; }
+            nav { padding: 0 14px; }
+            .nav-brand { font-size: 0.9rem; }
+            .bottom-nav { display: block; }
+
+            .view { padding: 16px 12px; }
+            .view-title { font-size: 1.4rem; }
+
+            .week-grid { grid-template-columns: 1fr; gap: 8px; }
+
+            .day-card {
+                min-height: auto;
+                display: flex;
+                gap: 14px;
+                align-items: flex-start;
+            }
+
+            .day-card-left { min-width: 46px; text-align: center; }
+            .day-card-tasks { flex: 1; padding-top: 2px; }
+
+            .cal-header-cell { padding: 6px 2px; font-size: 0.58rem; }
+            .cal-day { padding: 4px 3px; min-height: 46px; }
+            .cal-day-number { font-size: 0.73rem; }
+            .cal-dot { width: 5px; height: 5px; }
+            .month-title { font-size: 1rem; min-width: 130px; }
+
+            .form-row { grid-template-columns: 1fr; }
+            .modal { padding: 20px 16px; }
+
+            .btn-group { flex-direction: column; }
+            .btn { width: 100%; text-align: center; padding: 14px; }
+
+            .priority-slot { flex-wrap: wrap; }
+            .priority-slot input[type="text"] { min-width: 80px; }
+        }
+
+        @media (max-width: 380px) {
+            .nav-brand { font-size: 0.8rem; }
+            .sync-bar { padding: 4px 10px; font-size: 0.65rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="sync-bar">
+    <div class="sync-dot" id="sync-dot"></div>
+    <span id="sync-status">Connecting to cloud...</span>
+</div>
+
+<nav>
+    <div class="nav-brand">Personal Planner — Toby</div>
+    <div class="nav-tabs">
+        <button class="nav-tab active" onclick="showView('daily-focus',this)">Daily Focus</button>
+        <button class="nav-tab" onclick="showView('this-week',this)">This Week</button>
+        <button class="nav-tab" onclick="showView('monthly',this)">Monthly Overview</button>
+    </div>
+    <button class="btn-new-task" onclick="openModal()">+ New Task</button>
+</nav>
+
+<div class="bottom-nav">
+    <div class="bottom-nav-inner">
+        <button class="bottom-tab active" id="btab-daily" onclick="showView('daily-focus',null,'daily')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            Focus
+        </button>
+        <button class="bottom-tab" id="btab-week" onclick="showView('this-week',null,'week')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            Week
+        </button>
+        <button class="bottom-tab-new" onclick="openModal()">
+            <div class="plus-circle">+</div>
+            Task
+        </button>
+        <button class="bottom-tab" id="btab-monthly" onclick="showView('monthly',null,'monthly')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/></svg>
+            Monthly
+        </button>
+    </div>
+</div>
+
+<!-- DAILY FOCUS -->
+<div id="daily-focus" class="view active">
+    <div class="view-header">
+        <div class="view-title">Daily Focus</div>
+        <div class="date-display" id="date-display"></div>
+        <div class="greeting" id="greeting"></div>
+    </div>
+    <div class="priority-section">
+        <div class="section-label">Today's Top Priorities</div>
+        <div class="priority-slot">
+            <div class="priority-number">1</div>
+            <input type="text" id="priority1-input" placeholder="Enter priority...">
+            <select id="priority1-area"><option>Work</option><option>Ministry</option><option>Personal</option></select>
+            <label class="done-label"><input type="checkbox" id="priority1-done"> Done</label>
+        </div>
+        <div class="priority-slot">
+            <div class="priority-number">2</div>
+            <input type="text" id="priority2-input" placeholder="Enter priority...">
+            <select id="priority2-area"><option>Work</option><option>Ministry</option><option>Personal</option></select>
+            <label class="done-label"><input type="checkbox" id="priority2-done"> Done</label>
+        </div>
+        <div class="priority-slot">
+            <div class="priority-number">3</div>
+            <input type="text" id="priority3-input" placeholder="Enter priority...">
+            <select id="priority3-area"><option>Work</option><option>Ministry</option><option>Personal</option></select>
+            <label class="done-label"><input type="checkbox" id="priority3-done"> Done</label>
+        </div>
+    </div>
+    <div class="win-section">
+        <div class="section-label">Today's Win</div>
+        <textarea class="win-textarea" id="today-win" placeholder="What did you accomplish today?"></textarea>
+    </div>
+    <div class="btn-group">
+        <button class="btn btn-primary" id="save-btn">Save to Cloud</button>
+        <button class="btn btn-secondary" id="clear-btn">Clear</button>
+    </div>
+</div>
+
+<!-- THIS WEEK -->
+<div id="this-week" class="view">
+    <div class="view-header"><div class="view-title">This Week</div></div>
+    <div class="week-grid" id="week-grid"></div>
+</div>
+
+<!-- MONTHLY -->
+<div id="monthly" class="view">
+    <div class="month-nav">
+        <button class="month-arrow" onclick="changeMonth(-1)">&#8592;</button>
+        <div class="month-title" id="month-title"></div>
+        <button class="month-arrow" onclick="changeMonth(1)">&#8594;</button>
+    </div>
+    <div class="calendar-grid">
+        <div class="calendar-header">
+            <div class="cal-header-cell">Mon</div><div class="cal-header-cell">Tue</div>
+            <div class="cal-header-cell">Wed</div><div class="cal-header-cell">Thu</div>
+            <div class="cal-header-cell">Fri</div><div class="cal-header-cell">Sat</div>
+            <div class="cal-header-cell">Sun</div>
+        </div>
+        <div class="calendar-days" id="calendar-days"></div>
+    </div>
+    <div class="day-detail-panel" id="day-detail-panel">
+        <div class="day-detail-title" id="day-detail-title"></div>
+        <div id="day-detail-tasks"></div>
+    </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModalOutside(event)">
+    <div class="modal">
+        <div class="modal-title">New Task</div>
+        <div class="form-group">
+            <label class="form-label">Title *</label>
+            <input type="text" class="form-input" id="task-title" placeholder="Task title...">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea class="form-textarea" id="task-desc" placeholder="Short description..." maxlength="100"></textarea>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Area</label>
+                <select class="form-select" id="task-area">
+                    <option>Work</option><option>Ministry</option><option>Personal</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Priority</label>
+                <select class="form-select" id="task-priority">
+                    <option>High</option><option>Medium</option><option>Low</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Due Date</label>
+            <input type="date" class="form-input" id="task-due">
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveTask()">Save Task</button>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyBcbtRuCHlEvmFoIc7bv0CX4QWod7JImKQ",
+        authDomain: "toby-planner.firebaseapp.com",
+        databaseURL: "https://toby-planner-default-rtdb.firebaseio.com",
+        projectId: "toby-planner",
+        storageBucket: "toby-planner.firebasestorage.app",
+        messagingSenderId: "414510178714",
+        appId: "1:414510178714:web:ca4c3c32b36a361bea1a23"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const $ = id => document.getElementById(id);
+
+    function setSyncStatus(state, msg) {
+        $('sync-dot').className = 'sync-dot ' + state;
+        $('sync-status').textContent = msg;
+    }
+
+    function toYMD(date) {
+        return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+    }
+
+    function getPriorityColor(p) { return p==='High'?'#ef4444':p==='Medium'?'#f97316':'#6b7280'; }
+    function getAreaColor(a) { return a==='Work'?'#3b82f6':a==='Ministry'?'#22c55e':'#a855f7'; }
+
+    let cachedTasks = JSON.parse(localStorage.getItem('planner_tasks')||'[]');
+    let cachedFocus = JSON.parse(localStorage.getItem('planner_focus')||'{}');
+
+    // Firebase listeners
+    setSyncStatus('syncing','Connecting...');
+
+    onValue(ref(db,'tasks'), snap => {
+        const data = snap.val();
+        cachedTasks = data ? Object.values(data) : [];
+        localStorage.setItem('planner_tasks', JSON.stringify(cachedTasks));
+        setSyncStatus('connected','Synced · '+new Date().toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}));
+        const active = document.querySelector('.view.active')?.id;
+        if (active==='this-week') renderWeek();
+        if (active==='monthly') renderCalendar();
+    }, () => setSyncStatus('','Offline — saved locally'));
+
+    onValue(ref(db,'focus'), snap => {
+        const data = snap.val();
+        if (data) { cachedFocus = data; localStorage.setItem('planner_focus',JSON.stringify(data)); loadFocusUI(); }
+    });
+
+    // Navigation
+    window.showView = function(id, tab, mkey) {
+        document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+        document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+        document.querySelectorAll('.bottom-tab').forEach(t=>t.classList.remove('active'));
+        $(id).classList.add('active');
+        if (tab) tab.classList.add('active');
+        if (mkey) { const b=$('btab-'+mkey); if(b) b.classList.add('active'); }
+        if (id==='this-week') renderWeek();
+        if (id==='monthly') renderCalendar();
+    };
+
+    // Daily Focus
+    function initDailyFocus() {
+        const now = new Date();
+        const h = now.getHours();
+        $('greeting').textContent = `${h<12?'Good morning':h<17?'Good afternoon':'Good evening'}, Toby`;
+        $('date-display').textContent = now.toLocaleDateString('en-AU',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+        loadFocusUI();
+    }
+
+    function loadFocusUI() {
+        const f = cachedFocus;
+        for (let i=1;i<=3;i++) {
+            $(`priority${i}-input`).value = f[`p${i}input`]||'';
+            $(`priority${i}-area`).value = f[`p${i}area`]||'Work';
+            $(`priority${i}-done`).checked = f[`p${i}done`]===true;
+        }
+        $('today-win').value = f.win||'';
+    }
+
+    window.saveFocus = async function() {
+        setSyncStatus('syncing','Saving...');
+        const f = { win: $('today-win').value };
+        for (let i=1;i<=3;i++) {
+            f[`p${i}input`]=$(`priority${i}-input`).value;
+            f[`p${i}area`]=$(`priority${i}-area`).value;
+            f[`p${i}done`]=$(`priority${i}-done`).checked;
+        }
+        cachedFocus = f;
+        localStorage.setItem('planner_focus',JSON.stringify(f));
+        try { await set(ref(db,'focus'),f); showToast('Saved to cloud!'); }
+        catch(e) { showToast('Saved locally'); }
+    };
+
+    $('save-btn').addEventListener('click', window.saveFocus);
+    $('clear-btn').addEventListener('click', () => {
+        for(let i=1;i<=3;i++){$(`priority${i}-input`).value='';$(`priority${i}-area`).value='Work';$(`priority${i}-done`).checked=false;}
+        $('today-win').value='';
+    });
+
+    // Toast
+    window.showToast = function(msg) {
+        const t = document.createElement('div');
+        t.textContent = msg;
+        Object.assign(t.style,{position:'fixed',bottom:'88px',right:'20px',background:'var(--gold)',color:'var(--navy)',padding:'10px 20px',borderRadius:'8px',fontWeight:'600',fontSize:'0.875rem',zIndex:'999',opacity:'1',transition:'opacity 0.4s'});
+        document.body.appendChild(t);
+        setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),400);},1800);
+    };
+
+    // This Week
+    function renderWeek() {
+        const grid = $('week-grid');
+        grid.innerHTML = '';
+        const today = new Date(); today.setHours(0,0,0,0);
+        const monday = new Date(today);
+        const dow = today.getDay();
+        monday.setDate(today.getDate()+(dow===0?-6:1-dow));
+        const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+        for (let i=0;i<7;i++) {
+            const d = new Date(monday); d.setDate(monday.getDate()+i);
+            const ymd = toYMD(d);
+            const isToday = ymd===toYMD(today);
+            const dt = cachedTasks.filter(t=>t.dueDate===ymd);
+            const card = document.createElement('div');
+            card.className = 'day-card'+(isToday?' today':'');
+            card.innerHTML = `
+                <div class="day-card-left">
+                    <div class="day-name">${days[i]}</div>
+                    <div class="day-number">${d.getDate()}</div>
+                </div>
+                <div class="day-card-tasks">
+                    ${dt.length===0
+                        ? '<div style="color:var(--muted);font-size:0.73rem;padding-top:2px">No tasks</div>'
+                        : dt.map(t=>`
+                            <div class="task-mini-card ${t.completed?'completed':''}" onclick="toggleTaskComplete('${t.id}')">
+                                <div class="task-mini-header">
+                                    <div class="priority-dot" style="background:${getPriorityColor(t.priority)}"></div>
+                                    <div class="task-mini-title">${t.title}</div>
+                                </div>
+                                <span class="area-tag ${t.area}">${t.area}</span>
+                                ${t.description?`<div class="task-mini-desc">${t.description}</div>`:''}
+                            </div>`).join('')}
+                </div>`;
+            grid.appendChild(card);
+        }
+    }
+
+    window.toggleTaskComplete = async function(id) {
+        const task = cachedTasks.find(t=>t.id===id);
+        if (!task) return;
+        task.completed = !task.completed;
+        localStorage.setItem('planner_tasks',JSON.stringify(cachedTasks));
+        try { await update(ref(db,`tasks/${id}`),{completed:task.completed}); } catch(e){}
+        renderWeek();
+    };
+
+    // Monthly
+    let calYear=new Date().getFullYear(), calMonth=new Date().getMonth(), selectedDay=null;
+
+    window.changeMonth = function(d) {
+        calMonth+=d;
+        if(calMonth>11){calMonth=0;calYear++;}
+        if(calMonth<0){calMonth=11;calYear--;}
+        renderCalendar();
+    };
+
+    function renderCalendar() {
+        const mn=['January','February','March','April','May','June','July','August','September','October','November','December'];
+        $('month-title').textContent=`${mn[calMonth]} ${calYear}`;
+        const today=new Date();
+        const container=$('calendar-days'); container.innerHTML='';
+        let sdow=new Date(calYear,calMonth,1).getDay(); sdow=sdow===0?6:sdow-1;
+        const dim=new Date(calYear,calMonth+1,0).getDate();
+        const pmd=new Date(calYear,calMonth,0).getDate();
+        let cells=[];
+        for(let i=sdow-1;i>=0;i--) cells.push({day:pmd-i,current:false});
+        for(let d=1;d<=dim;d++) cells.push({day:d,current:true});
+        const rem=42-cells.length;
+        for(let d=1;d<=rem;d++) cells.push({day:d,current:false});
+
+        cells.forEach(cell=>{
+            const el=document.createElement('div');
+            el.className='cal-day'+(!cell.current?' other-month':'');
+            const ymd=cell.current?`${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(cell.day).padStart(2,'0')}`:null;
+            const isToday=cell.current&&cell.day===today.getDate()&&calMonth===today.getMonth()&&calYear===today.getFullYear();
+            if(isToday) el.classList.add('today-cal');
+            if(ymd&&ymd===selectedDay) el.classList.add('selected');
+            const dt=ymd?cachedTasks.filter(t=>t.dueDate===ymd):[];
+            const dots=[...new Set(dt.map(t=>t.area))].map(a=>`<div class="cal-dot" style="background:${getAreaColor(a)}"></div>`).join('');
+            el.innerHTML=`<div class="cal-day-number">${cell.day}</div><div class="cal-dots">${dots}</div>`;
+            if(ymd) el.addEventListener('click',()=>showDayDetail(ymd,dt));
+            container.appendChild(el);
+        });
+
+        if(selectedDay){
+            const t2=cachedTasks.filter(t=>t.dueDate===selectedDay);
+            showDayDetail(selectedDay,t2,false);
+        }
+    }
+
+    function showDayDetail(ymd,dt,rerender=true) {
+        selectedDay=ymd;
+        const date=new Date(ymd+'T00:00:00');
+        $('day-detail-title').textContent=date.toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+        const c=$('day-detail-tasks');
+        c.innerHTML=dt.length===0
+            ? '<div class="empty-state">No tasks for this day.</div>'
+            : dt.map(t=>`
+                <div class="detail-task-item">
+                    <div class="priority-dot" style="background:${getPriorityColor(t.priority)};width:10px;height:10px;border-radius:50%;margin-top:4px;flex-shrink:0"></div>
+                    <div class="detail-task-info">
+                        <div class="detail-task-title">${t.title} <span class="area-tag ${t.area}" style="margin-left:6px">${t.area}</span></div>
+                        ${t.description?`<div class="detail-task-desc">${t.description}</div>`:''}
+                    </div>
+                </div>`).join('');
+        $('day-detail-panel').classList.add('visible');
+        if(rerender) renderCalendar();
+    }
+
+    // Modal
+    window.openModal = function() {
+        $('modal-overlay').classList.add('open');
+        $('task-title').focus();
+        $('task-due').value=toYMD(new Date());
+    };
+
+    window.closeModal = function() {
+        $('modal-overlay').classList.remove('open');
+        ['task-title','task-desc','task-due'].forEach(id=>$(id).value='');
+        $('task-area').value='Work'; $('task-priority').value='High';
+    };
+
+    window.closeModalOutside = function(e) { if(e.target===$('modal-overlay')) window.closeModal(); };
+
+    window.saveTask = async function() {
+        const title=$('task-title').value.trim();
+        if(!title){$('task-title').focus();return;}
+        const task={
+            id:Date.now().toString(), title,
+            description:$('task-desc').value.trim(),
+            area:$('task-area').value,
+            priority:$('task-priority').value,
+            dueDate:$('task-due').value,
+            completed:false
+        };
+        cachedTasks.push(task);
+        localStorage.setItem('planner_tasks',JSON.stringify(cachedTasks));
+        try { await set(ref(db,`tasks/${task.id}`),task); showToast('Task saved to cloud!'); }
+        catch(e) { showToast('Task saved locally'); }
+        window.closeModal();
+        const active=document.querySelector('.view.active')?.id;
+        if(active==='this-week') renderWeek();
+        if(active==='monthly') renderCalendar();
+    };
+
+    initDailyFocus();
+</script>
+</body>
+</html>
