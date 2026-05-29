@@ -43,6 +43,8 @@
             color: var(--muted);
         }
 
+        .sync-status-text { flex: 1; }
+
         .sync-dot {
             width: 8px; height: 8px;
             border-radius: 50%;
@@ -53,6 +55,20 @@
 
         .sync-dot.connected { background: #22c55e; }
         .sync-dot.syncing { background: var(--gold); animation: pulse 1s infinite; }
+
+        .auth-btn {
+            background: transparent;
+            border: 1px solid var(--navy-border);
+            color: var(--gold);
+            border-radius: 999px;
+            padding: 5px 12px;
+            cursor: pointer;
+            font: inherit;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .auth-btn:hover { border-color: var(--gold); color: var(--gold-light); }
 
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
@@ -307,6 +323,86 @@
         .btn-primary:hover { background: var(--gold-light); }
         .btn-secondary { background: var(--navy-card); color: var(--muted); border: 1px solid var(--navy-border); }
         .btn-secondary:hover { color: var(--white); }
+
+        .daily-overview-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(320px, 1.4fr);
+            gap: 18px;
+            margin-top: 24px;
+        }
+
+        .summary-panel {
+            background: var(--navy-card);
+            border: 1px solid var(--navy-border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .summary-panel-header {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--navy-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .summary-panel-title {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--gold);
+        }
+
+        .summary-count {
+            color: var(--muted);
+            font-size: 0.72rem;
+            white-space: nowrap;
+        }
+
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .summary-table th {
+            color: var(--muted);
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            padding: 10px 12px;
+            text-align: left;
+            text-transform: uppercase;
+            background: var(--navy-input);
+        }
+
+        .summary-table td {
+            border-top: 1px solid var(--navy-border);
+            color: var(--white);
+            font-size: 0.82rem;
+            padding: 11px 12px;
+            vertical-align: middle;
+        }
+
+        .summary-table tr.completed-row td {
+            color: var(--muted);
+            text-decoration: line-through;
+        }
+
+        .table-check {
+            accent-color: var(--gold);
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .empty-table-row {
+            color: var(--muted);
+            padding: 20px 14px;
+            text-align: center;
+            font-size: 0.82rem;
+        }
 
         /* THIS WEEK */
         .week-grid {
@@ -568,11 +664,15 @@
 
             .priority-slot { flex-wrap: wrap; }
             .priority-slot input[type="text"] { min-width: 80px; }
+            .daily-overview-grid { grid-template-columns: 1fr; }
+            .summary-panel { overflow-x: auto; }
+            .summary-table { min-width: 520px; }
         }
 
         @media (max-width: 380px) {
             .nav-brand { font-size: 0.8rem; }
             .sync-bar { padding: 4px 10px; font-size: 0.65rem; }
+            .auth-btn { padding: 4px 8px; }
         }
     </style>
 </head>
@@ -580,7 +680,8 @@
 
 <div class="sync-bar">
     <div class="sync-dot" id="sync-dot"></div>
-    <span id="sync-status">Connecting to cloud...</span>
+    <span class="sync-status-text" id="sync-status">Connecting to cloud...</span>
+    <button class="auth-btn" id="auth-btn" type="button">Sign in</button>
 </div>
 
 <nav>
@@ -649,6 +750,41 @@
     <div class="btn-group">
         <button class="btn btn-primary" id="save-btn">Save to Cloud</button>
         <button class="btn btn-secondary" id="clear-btn">Clear</button>
+    </div>
+    <div class="daily-overview-grid">
+        <section class="summary-panel">
+            <div class="summary-panel-header">
+                <div class="summary-panel-title">Today's Priorities</div>
+                <div class="summary-count" id="priority-summary-count">0 active</div>
+            </div>
+            <table class="summary-table">
+                <thead>
+                    <tr>
+                        <th>Done</th>
+                        <th>Priority</th>
+                        <th>Area</th>
+                    </tr>
+                </thead>
+                <tbody id="priority-summary-body"></tbody>
+            </table>
+        </section>
+        <section class="summary-panel">
+            <div class="summary-panel-header">
+                <div class="summary-panel-title">30-Day Lookahead</div>
+                <div class="summary-count" id="lookahead-count">0 items</div>
+            </div>
+            <table class="summary-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Task</th>
+                        <th>Area</th>
+                        <th>Priority</th>
+                    </tr>
+                </thead>
+                <tbody id="lookahead-body"></tbody>
+            </table>
+        </section>
     </div>
 </div>
 
@@ -719,6 +855,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
     import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
     const firebaseConfig = {
@@ -732,9 +869,14 @@
     };
 
     const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
     const db = getDatabase(app);
 
     const $ = id => document.getElementById(id);
+    let currentUser = null;
+    let unsubscribeTasks = null;
+    let unsubscribeFocus = null;
 
     function setSyncStatus(state, msg) {
         $('sync-dot').className = 'sync-dot ' + state;
@@ -747,26 +889,98 @@
 
     function getPriorityColor(p) { return p==='High'?'#ef4444':p==='Medium'?'#f97316':'#6b7280'; }
     function getAreaColor(a) { return a==='Work'?'#3b82f6':a==='Ministry'?'#22c55e':'#a855f7'; }
+    function cleanArea(a) { return ['Work','Ministry','Personal'].includes(a) ? a : 'Personal'; }
+    function cleanPriority(p) { return ['High','Medium','Low'].includes(p) ? p : 'Medium'; }
+    function formatShortDate(ymd) {
+        const date = new Date(ymd + 'T00:00:00');
+        return date.toLocaleDateString('en-AU',{day:'numeric',month:'short'});
+    }
+    function escapeHtml(value) {
+        return String(value || '')
+            .replace(/&/g,'&amp;')
+            .replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;')
+            .replace(/'/g,'&#039;');
+    }
+    function jsArg(value) { return JSON.stringify(String(value || '')); }
 
     let cachedTasks = JSON.parse(localStorage.getItem('planner_tasks')||'[]');
     let cachedFocus = JSON.parse(localStorage.getItem('planner_focus')||'{}');
 
-    // Firebase listeners
-    setSyncStatus('syncing','Connecting...');
+    function detachFirebaseListeners() {
+        if (unsubscribeTasks) unsubscribeTasks();
+        if (unsubscribeFocus) unsubscribeFocus();
+        unsubscribeTasks = null;
+        unsubscribeFocus = null;
+    }
 
-    onValue(ref(db,'tasks'), snap => {
-        const data = snap.val();
-        cachedTasks = data ? Object.values(data) : [];
-        localStorage.setItem('planner_tasks', JSON.stringify(cachedTasks));
-        setSyncStatus('connected','Synced · '+new Date().toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}));
+    function renderActiveView() {
         const active = document.querySelector('.view.active')?.id;
+        if (active==='daily-focus') renderDailyOverview();
         if (active==='this-week') renderWeek();
         if (active==='monthly') renderCalendar();
-    }, () => setSyncStatus('','Offline — saved locally'));
+    }
 
-    onValue(ref(db,'focus'), snap => {
-        const data = snap.val();
-        if (data) { cachedFocus = data; localStorage.setItem('planner_focus',JSON.stringify(data)); loadFocusUI(); }
+    function updateAuthButton(user) {
+        const btn = $('auth-btn');
+        if (!btn) return;
+        btn.textContent = user ? 'Sign out' : 'Sign in';
+        btn.title = user?.email || 'Sign in with Google';
+    }
+
+    function attachFirebaseListeners() {
+        detachFirebaseListeners();
+        setSyncStatus('syncing','Connecting to cloud...');
+
+        unsubscribeTasks = onValue(ref(db,'tasks'), snap => {
+            const data = snap.val();
+            cachedTasks = data ? Object.values(data) : [];
+            localStorage.setItem('planner_tasks', JSON.stringify(cachedTasks));
+            setSyncStatus('connected','Synced · '+new Date().toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}));
+            renderActiveView();
+        }, () => setSyncStatus('','Cloud blocked — check Firebase rules'));
+
+        unsubscribeFocus = onValue(ref(db,'focus'), snap => {
+            const data = snap.val();
+            if (data) { cachedFocus = data; localStorage.setItem('planner_focus',JSON.stringify(data)); loadFocusUI(); }
+        }, () => setSyncStatus('','Focus sync blocked — check Firebase rules'));
+    }
+
+    window.signInToPlanner = async function() {
+        setSyncStatus('syncing','Opening Google sign-in...');
+        try {
+            await signInWithPopup(auth, provider);
+        } catch(e) {
+            setSyncStatus('','Sign-in cancelled');
+            showToast('Sign-in cancelled');
+        }
+    };
+
+    window.signOutOfPlanner = async function() {
+        await signOut(auth);
+        showToast('Signed out');
+    };
+
+    $('auth-btn').addEventListener('click', () => {
+        if (currentUser) window.signOutOfPlanner();
+        else window.signInToPlanner();
+    });
+
+    onAuthStateChanged(auth, user => {
+        currentUser = user;
+        updateAuthButton(user);
+
+        if (!user) {
+            detachFirebaseListeners();
+            setSyncStatus('', 'Signed out — local cache only');
+            loadFocusUI();
+            renderActiveView();
+            return;
+        }
+
+        setSyncStatus('syncing', `Signed in as ${user.email || 'Google user'}`);
+        attachFirebaseListeners();
     });
 
     // Navigation
@@ -779,6 +993,7 @@
         if (mkey) { const b=$('btab-'+mkey); if(b) b.classList.add('active'); }
         if (id==='this-week') renderWeek();
         if (id==='monthly') renderCalendar();
+        if (id==='daily-focus') renderDailyOverview();
     };
 
     // Daily Focus
@@ -788,6 +1003,7 @@
         $('greeting').textContent = `${h<12?'Good morning':h<17?'Good afternoon':'Good evening'}, Toby`;
         $('date-display').textContent = now.toLocaleDateString('en-AU',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
         loadFocusUI();
+        attachFocusInputListeners();
     }
 
     function loadFocusUI() {
@@ -798,18 +1014,124 @@
             $(`priority${i}-done`).checked = f[`p${i}done`]===true;
         }
         $('today-win').value = f.win||'';
+        renderDailyOverview();
     }
 
-    window.saveFocus = async function() {
-        setSyncStatus('syncing','Saving...');
+    function readFocusFromUI() {
         const f = { win: $('today-win').value };
         for (let i=1;i<=3;i++) {
             f[`p${i}input`]=$(`priority${i}-input`).value;
             f[`p${i}area`]=$(`priority${i}-area`).value;
             f[`p${i}done`]=$(`priority${i}-done`).checked;
         }
+        return f;
+    }
+
+    function attachFocusInputListeners() {
+        ['today-win'].forEach(id => $(id).addEventListener('input', () => { cachedFocus = readFocusFromUI(); renderDailyOverview(); }));
+        for (let i=1;i<=3;i++) {
+            [`priority${i}-input`,`priority${i}-area`,`priority${i}-done`].forEach(id => {
+                const eventName = id.endsWith('input') ? 'input' : 'change';
+                $(id).addEventListener(eventName, () => { cachedFocus = readFocusFromUI(); renderDailyOverview(); });
+            });
+        }
+    }
+
+    function renderDailyOverview() {
+        renderPrioritySummary();
+        renderLookahead();
+    }
+
+    function renderPrioritySummary() {
+        const body = $('priority-summary-body');
+        if (!body) return;
+
+        const rows = [1,2,3]
+            .map(i => ({
+                index: i,
+                title: cachedFocus[`p${i}input`] || '',
+                area: cleanArea(cachedFocus[`p${i}area`]),
+                done: cachedFocus[`p${i}done`] === true
+            }))
+            .filter(p => p.title.trim());
+
+        $('priority-summary-count').textContent = `${rows.filter(p => !p.done).length} active`;
+
+        if (!rows.length) {
+            body.innerHTML = `<tr><td colspan="3"><div class="empty-table-row">Enter priorities above to build today's action table.</div></td></tr>`;
+            return;
+        }
+
+        body.innerHTML = rows.map(p => `
+            <tr class="${p.done ? 'completed-row' : ''}">
+                <td><input class="table-check" type="checkbox" ${p.done ? 'checked' : ''} onchange="togglePriorityDone(${p.index})"></td>
+                <td>${escapeHtml(p.title)}</td>
+                <td><span class="area-tag ${p.area}">${p.area}</span></td>
+            </tr>
+        `).join('');
+    }
+
+    function renderLookahead() {
+        const body = $('lookahead-body');
+        if (!body) return;
+
+        const today = new Date(); today.setHours(0,0,0,0);
+        const limit = new Date(today); limit.setDate(limit.getDate()+30);
+        const rows = cachedTasks
+            .filter(t => t.dueDate)
+            .filter(t => {
+                const due = new Date(t.dueDate + 'T00:00:00');
+                return due >= today && due <= limit;
+            })
+            .sort((a,b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
+            .slice(0, 8);
+
+        $('lookahead-count').textContent = `${rows.length} item${rows.length === 1 ? '' : 's'}`;
+
+        if (!rows.length) {
+            body.innerHTML = `<tr><td colspan="4"><div class="empty-table-row">No dated tasks in the next 30 days.</div></td></tr>`;
+            return;
+        }
+
+        body.innerHTML = rows.map(t => {
+            const area = cleanArea(t.area);
+            const priority = cleanPriority(t.priority);
+            return `
+                <tr class="${t.completed ? 'completed-row' : ''}">
+                    <td>${formatShortDate(t.dueDate)}</td>
+                    <td>${escapeHtml(t.title)}</td>
+                    <td><span class="area-tag ${area}">${area}</span></td>
+                    <td><div class="priority-dot" style="background:${getPriorityColor(priority)}"></div></td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    window.togglePriorityDone = async function(index) {
+        cachedFocus = readFocusFromUI();
+        cachedFocus[`p${index}done`] = !cachedFocus[`p${index}done`];
+        $(`priority${index}-done`).checked = cachedFocus[`p${index}done`];
+        localStorage.setItem('planner_focus',JSON.stringify(cachedFocus));
+        renderDailyOverview();
+        if (currentUser) {
+            try { await set(ref(db,'focus'),cachedFocus); }
+            catch(e) { showToast('Saved locally'); }
+        } else {
+            setSyncStatus('','Updated locally — sign in to sync');
+        }
+    }
+
+    window.saveFocus = async function() {
+        setSyncStatus('syncing','Saving...');
+        const f = readFocusFromUI();
         cachedFocus = f;
         localStorage.setItem('planner_focus',JSON.stringify(f));
+        renderDailyOverview();
+        if (!currentUser) {
+            setSyncStatus('','Saved locally — sign in to sync');
+            showToast('Saved locally');
+            return;
+        }
         try { await set(ref(db,'focus'),f); showToast('Saved to cloud!'); }
         catch(e) { showToast('Saved locally'); }
     };
@@ -818,6 +1140,8 @@
     $('clear-btn').addEventListener('click', () => {
         for(let i=1;i<=3;i++){$(`priority${i}-input`).value='';$(`priority${i}-area`).value='Work';$(`priority${i}-done`).checked=false;}
         $('today-win').value='';
+        cachedFocus = readFocusFromUI();
+        renderDailyOverview();
     });
 
     // Toast
@@ -854,15 +1178,19 @@
                 <div class="day-card-tasks">
                     ${dt.length===0
                         ? '<div style="color:var(--muted);font-size:0.73rem;padding-top:2px">No tasks</div>'
-                        : dt.map(t=>`
-                            <div class="task-mini-card ${t.completed?'completed':''}" onclick="toggleTaskComplete('${t.id}')">
+                        : dt.map(t=>{
+                            const area = cleanArea(t.area);
+                            const priority = cleanPriority(t.priority);
+                            return `
+                            <div class="task-mini-card ${t.completed?'completed':''}" onclick='toggleTaskComplete(${jsArg(t.id)})'>
                                 <div class="task-mini-header">
-                                    <div class="priority-dot" style="background:${getPriorityColor(t.priority)}"></div>
-                                    <div class="task-mini-title">${t.title}</div>
+                                    <div class="priority-dot" style="background:${getPriorityColor(priority)}"></div>
+                                    <div class="task-mini-title">${escapeHtml(t.title)}</div>
                                 </div>
-                                <span class="area-tag ${t.area}">${t.area}</span>
-                                ${t.description?`<div class="task-mini-desc">${t.description}</div>`:''}
-                            </div>`).join('')}
+                                <span class="area-tag ${area}">${area}</span>
+                                ${t.description?`<div class="task-mini-desc">${escapeHtml(t.description)}</div>`:''}
+                            </div>`;
+                        }).join('')}
                 </div>`;
             grid.appendChild(card);
         }
@@ -873,7 +1201,11 @@
         if (!task) return;
         task.completed = !task.completed;
         localStorage.setItem('planner_tasks',JSON.stringify(cachedTasks));
-        try { await update(ref(db,`tasks/${id}`),{completed:task.completed}); } catch(e){}
+        if (currentUser) {
+            try { await update(ref(db,`tasks/${id}`),{completed:task.completed}); } catch(e){}
+        } else {
+            setSyncStatus('','Updated locally — sign in to sync');
+        }
         renderWeek();
     };
 
@@ -909,7 +1241,7 @@
             if(isToday) el.classList.add('today-cal');
             if(ymd&&ymd===selectedDay) el.classList.add('selected');
             const dt=ymd?cachedTasks.filter(t=>t.dueDate===ymd):[];
-            const dots=[...new Set(dt.map(t=>t.area))].map(a=>`<div class="cal-dot" style="background:${getAreaColor(a)}"></div>`).join('');
+            const dots=[...new Set(dt.map(t=>cleanArea(t.area)))].map(a=>`<div class="cal-dot" style="background:${getAreaColor(a)}"></div>`).join('');
             el.innerHTML=`<div class="cal-day-number">${cell.day}</div><div class="cal-dots">${dots}</div>`;
             if(ymd) el.addEventListener('click',()=>showDayDetail(ymd,dt));
             container.appendChild(el);
@@ -928,14 +1260,18 @@
         const c=$('day-detail-tasks');
         c.innerHTML=dt.length===0
             ? '<div class="empty-state">No tasks for this day.</div>'
-            : dt.map(t=>`
+            : dt.map(t=>{
+                const area = cleanArea(t.area);
+                const priority = cleanPriority(t.priority);
+                return `
                 <div class="detail-task-item">
-                    <div class="priority-dot" style="background:${getPriorityColor(t.priority)};width:10px;height:10px;border-radius:50%;margin-top:4px;flex-shrink:0"></div>
+                    <div class="priority-dot" style="background:${getPriorityColor(priority)};width:10px;height:10px;border-radius:50%;margin-top:4px;flex-shrink:0"></div>
                     <div class="detail-task-info">
-                        <div class="detail-task-title">${t.title} <span class="area-tag ${t.area}" style="margin-left:6px">${t.area}</span></div>
-                        ${t.description?`<div class="detail-task-desc">${t.description}</div>`:''}
+                        <div class="detail-task-title">${escapeHtml(t.title)} <span class="area-tag ${area}" style="margin-left:6px">${area}</span></div>
+                        ${t.description?`<div class="detail-task-desc">${escapeHtml(t.description)}</div>`:''}
                     </div>
-                </div>`).join('');
+                </div>`;
+            }).join('');
         $('day-detail-panel').classList.add('visible');
         if(rerender) renderCalendar();
     }
@@ -968,12 +1304,18 @@
         };
         cachedTasks.push(task);
         localStorage.setItem('planner_tasks',JSON.stringify(cachedTasks));
-        try { await set(ref(db,`tasks/${task.id}`),task); showToast('Task saved to cloud!'); }
-        catch(e) { showToast('Task saved locally'); }
+        if (currentUser) {
+            try { await set(ref(db,`tasks/${task.id}`),task); showToast('Task saved to cloud!'); }
+            catch(e) { showToast('Task saved locally'); }
+        } else {
+            setSyncStatus('','Task saved locally — sign in to sync');
+            showToast('Task saved locally');
+        }
         window.closeModal();
         const active=document.querySelector('.view.active')?.id;
         if(active==='this-week') renderWeek();
         if(active==='monthly') renderCalendar();
+        if(active==='daily-focus') renderDailyOverview();
     };
 
     initDailyFocus();
