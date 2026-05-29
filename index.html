@@ -899,7 +899,9 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const provider = new GoogleAuthProvider();
-    provider.addScope('https://www.googleapis.com/auth/calendar.events');
+    const calendarProvider = new GoogleAuthProvider();
+    calendarProvider.addScope('https://www.googleapis.com/auth/calendar.events');
+    calendarProvider.setCustomParameters({ prompt: 'consent' });
     const db = getDatabase(app);
 
     const $ = id => document.getElementById(id);
@@ -997,12 +999,7 @@
     window.signInToPlanner = async function() {
         setSyncStatus('syncing','Opening Google sign-in...');
         try {
-            const result = await signInWithPopup(auth, provider);
-            const credential = GoogleAuthProvider.credentialFromResult(result);
-            if (credential?.accessToken) {
-                calendarAccessToken = credential.accessToken;
-                sessionStorage.setItem('planner_calendar_token', calendarAccessToken);
-            }
+            await signInWithPopup(auth, provider);
         } catch(e) {
             setSyncStatus('','Sign-in cancelled');
             showToast('Sign-in cancelled');
@@ -1170,7 +1167,7 @@
         if (calendarAccessToken) return calendarAccessToken;
 
         setSyncStatus('syncing','Requesting Google Calendar access...');
-        const result = await signInWithPopup(auth, provider);
+        const result = await signInWithPopup(auth, calendarProvider);
         const credential = GoogleAuthProvider.credentialFromResult(result);
         if (!credential?.accessToken) throw new Error('Calendar permission was not granted');
 
