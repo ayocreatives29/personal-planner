@@ -361,6 +361,30 @@
             white-space: nowrap;
         }
 
+        .lookahead-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .calendar-sync-btn {
+            background: var(--navy-input);
+            border: 1px solid var(--navy-border);
+            color: var(--gold);
+            border-radius: 999px;
+            cursor: pointer;
+            font: inherit;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 6px 11px;
+            white-space: nowrap;
+        }
+
+        .calendar-sync-btn:hover { border-color: var(--gold); color: var(--gold-light); }
+        .calendar-sync-btn:disabled { cursor: not-allowed; opacity: 0.55; }
+
         .summary-table {
             width: 100%;
             border-collapse: collapse;
@@ -667,6 +691,7 @@
             .daily-overview-grid { grid-template-columns: 1fr; }
             .summary-panel { overflow-x: auto; }
             .summary-table { min-width: 520px; }
+            .lookahead-actions { justify-content: flex-start; }
         }
 
         @media (max-width: 380px) {
@@ -771,7 +796,10 @@
         <section class="summary-panel">
             <div class="summary-panel-header">
                 <div class="summary-panel-title">30-Day Lookahead</div>
-                <div class="summary-count" id="lookahead-count">0 items</div>
+                <div class="lookahead-actions">
+                    <div class="summary-count" id="lookahead-count">0 items</div>
+                    <button class="calendar-sync-btn" id="calendar-sync-btn" type="button">Sync Calendar</button>
+                </div>
             </div>
             <table class="summary-table">
                 <thead>
@@ -871,12 +899,14 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const provider = new GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/calendar.events');
     const db = getDatabase(app);
 
     const $ = id => document.getElementById(id);
     let currentUser = null;
     let unsubscribeTasks = null;
     let unsubscribeFocus = null;
+    let calendarAccessToken = sessionStorage.getItem('planner_calendar_token') || '';
 
     function setSyncStatus(state, msg) {
         $('sync-dot').className = 'sync-dot ' + state;
@@ -895,6 +925,11 @@
         const date = new Date(ymd + 'T00:00:00');
         return date.toLocaleDateString('en-AU',{day:'numeric',month:'short'});
     }
+    function addDays(ymd, days) {
+        const date = new Date(ymd + 'T00:00:00');
+        date.setDate(date.getDate()+days);
+        return toYMD(date);
+    }
     function escapeHtml(value) {
         return String(value || '')
             .replace(/&/g,'&amp;')
@@ -904,6 +939,18 @@
             .replace(/'/g,'&#039;');
     }
     function jsArg(value) { return JSON.stringify(String(value || '')); }
+
+    function getLookaheadTasks() {
+        const today = new Date(); today.setHours(0,0,0,0);
+        const limit = new Date(today); limit.setDate(limit.getDate()+30);
+        return cachedTasks
+            .filter(t => t.dueDate)
+            .filter(t => {
+                const due = new Date(t.dueDate + 'T00:00:00');
+                return due >= today && due <= limit;
+            })
+            .sort((a,b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+    }
 
     let cachedTasks = JSON.parse(localStorage.getItem('planner_tasks')||'[]');
     let cachedFocus = JSON.parse(localStorage.getItem('planner_focus')||'{}');
@@ -950,7 +997,12 @@
     window.signInToPlanner = async function() {
         setSyncStatus('syncing','Opening Google sign-in...');
         try {
-            await signInWithPopup(auth, provider);
+            const result = await signInWithPopup(auth, provider);
+            const credential = GoogleAuthProvider.credentialFromResult(result);
+            if (credential?.accessToken) {
+                calendarAccessToken = credential.accessToken;
+                sessionStorage.setItem('planner_calendar_token', calendarAccessToken);
+            }
         } catch(e) {
             setSyncStatus('','Sign-in cancelled');
             showToast('Sign-in cancelled');
@@ -958,6 +1010,8 @@
     };
 
     window.signOutOfPlanner = async function() {
+        calendarAccessToken = '';
+        sessionStorage.removeItem('planner_calendar_token');
         await signOut(auth);
         showToast('Signed out');
     };
@@ -1075,16 +1129,7 @@
         const body = $('lookahead-body');
         if (!body) return;
 
-        const today = new Date(); today.setHours(0,0,0,0);
-        const limit = new Date(today); limit.setDate(limit.getDate()+30);
-        const rows = cachedTasks
-            .filter(t => t.dueDate)
-            .filter(t => {
-                const due = new Date(t.dueDate + 'T00:00:00');
-                return due >= today && due <= limit;
-            })
-            .sort((a,b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
-            .slice(0, 8);
+        const rows = getLookaheadTasks().slice(0, 8);
 
         $('lookahead-count').textContent = `${rows.length} item${rows.length === 1 ? '' : 's'}`;
 
@@ -1121,6 +1166,145 @@
         }
     }
 
+    async function ensureCalendarAccess() {
+        if (calendarAccessToken) return calendarAccessToken;
+
+        setSyncStatus('syncing','Requesting Google Calendar access...');
+        const result = await signInWithPopup(auth, provider);
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        if (!credential?.accessToken) throw new Error('Calendar permission was not granted');
+
+        calendarAccessToken = credential.accessToken;
+        sessionStorage.setItem('planner_calendar_token', calendarAccessToken);
+        return calendarAccessToken;
+    }
+
+    function toCalendarEvent(task) {
+        const area = cleanArea(task.area);
+        const priority = cleanPriority(task.priority);
+        return {
+            summary: task.title,
+            description: [
+                task.description || '',
+                '',
+                `Planner area: ${area}`,
+                `Planner priority: ${priority}`,
+                `Planner task id: ${task.id}`
+            ].join('\n').trim(),
+            start: { date: task.dueDate },
+            end: { date: addDays(task.dueDate, 1) },
+            transparency: 'transparent',
+            reminders: {
+                useDefault: false,
+                overrides: [{ method: 'popup', minutes: 540 }]
+            },
+            extendedProperties: {
+                private: {
+                    plannerTaskId: task.id,
+                    plannerSource: 'personal-planner'
+                }
+            }
+        };
+    }
+
+    async function calendarFetch(url, options = {}) {
+        let response = await fetch(url, {
+            ...options,
+            headers: {
+                'Authorization': `Bearer ${calendarAccessToken}`,
+                'Content-Type': 'application/json',
+                ...(options.headers || {})
+            }
+        });
+
+        if (response.status === 401) {
+            calendarAccessToken = '';
+            sessionStorage.removeItem('planner_calendar_token');
+            await ensureCalendarAccess();
+            response = await fetch(url, {
+                ...options,
+                headers: {
+                    'Authorization': `Bearer ${calendarAccessToken}`,
+                    'Content-Type': 'application/json',
+                    ...(options.headers || {})
+                }
+            });
+        }
+
+        if (!response.ok) {
+            const body = await response.text();
+            throw new Error(body || `Calendar request failed: ${response.status}`);
+        }
+
+        return response.json();
+    }
+
+    async function syncTaskToCalendar(task) {
+        const event = toCalendarEvent(task);
+        const baseUrl = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
+
+        if (task.googleEventId) {
+            try {
+                return await calendarFetch(`${baseUrl}/${encodeURIComponent(task.googleEventId)}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(event)
+                });
+            } catch(e) {
+                if (!String(e.message).includes('Not Found') && !String(e.message).includes('"code": 404')) throw e;
+            }
+        }
+
+        return calendarFetch(baseUrl, {
+            method: 'POST',
+            body: JSON.stringify(event)
+        });
+    }
+
+    window.syncLookaheadToCalendar = async function() {
+        const button = $('calendar-sync-btn');
+        const tasksToSync = getLookaheadTasks().filter(t => !t.completed).slice(0, 30);
+
+        if (!tasksToSync.length) {
+            showToast('No upcoming tasks to sync');
+            return;
+        }
+
+        button.disabled = true;
+        button.textContent = 'Syncing...';
+        setSyncStatus('syncing','Syncing planner tasks to Google Calendar...');
+
+        let synced = 0;
+        try {
+            await ensureCalendarAccess();
+
+            for (const task of tasksToSync) {
+                const event = await syncTaskToCalendar(task);
+                task.googleEventId = event.id;
+                task.googleSyncedAt = new Date().toISOString();
+                synced++;
+
+                localStorage.setItem('planner_tasks',JSON.stringify(cachedTasks));
+                if (currentUser) {
+                    await update(ref(db,`tasks/${task.id}`), {
+                        googleEventId: task.googleEventId,
+                        googleSyncedAt: task.googleSyncedAt
+                    });
+                }
+            }
+
+            setSyncStatus('connected',`Calendar synced · ${synced} task${synced === 1 ? '' : 's'}`);
+            showToast(`Synced ${synced} task${synced === 1 ? '' : 's'} to Calendar`);
+        } catch(e) {
+            console.error(e);
+            setSyncStatus('','Calendar sync failed');
+            showToast('Calendar sync failed');
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Sync Calendar';
+            renderDailyOverview();
+        }
+    };
+
     window.saveFocus = async function() {
         setSyncStatus('syncing','Saving...');
         const f = readFocusFromUI();
@@ -1137,6 +1321,7 @@
     };
 
     $('save-btn').addEventListener('click', window.saveFocus);
+    $('calendar-sync-btn').addEventListener('click', window.syncLookaheadToCalendar);
     $('clear-btn').addEventListener('click', () => {
         for(let i=1;i<=3;i++){$(`priority${i}-input`).value='';$(`priority${i}-area`).value='Work';$(`priority${i}-done`).checked=false;}
         $('today-win').value='';
